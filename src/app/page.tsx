@@ -1,145 +1,97 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Question } from "@/types/question";
+
+// Define proper types
+interface Option {
+  OP_ID: number;
+  OP_NAME: string;
+}
+
+interface QuestionItem {
+  Q_ID: string;
+  Q_NAME: string;
+  Q_ANS: string;
+  childItems: Option[];
+}
 
 export default function Home() {
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
 
   // Enhanced safe JSON parser
-  function safeJSONParse(jsonString: string) {
-    console.log("Original string length:", jsonString.length);
-    
+  function safeJSONParse(jsonString: string): { items: QuestionItem[] } {
     try {
       return JSON.parse(jsonString);
-    } catch (firstError) {
-      console.log("First parse failed, attempting fixes...");
-      
-      // Multiple fix attempts
+    } catch {
+      // Automatic fix attempts
       const fixAttempts = [
-        // Attempt 1: Fix unescaped quotes in string values
         (str: string) => str.replace(/: \"([^\"]*?)\"([^\"]*?)\"/g, ': "$1\\"$2"'),
-        
-        // Attempt 2: Remove any BOM characters and trim
         (str: string) => str.replace(/^\uFEFF/, '').trim(),
-        
-        // Attempt 3: More comprehensive quote fixing
-        (str: string) => {
-          return str.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match, content) => {
-            // If the content has unescaped quotes, escape them
-            if (match.includes('"') && !match.includes('\\"')) {
-              const escaped = match.replace(/([^\\])"/g, '$1\\"');
-              return escaped;
-            }
-            return match;
-          });
-        }
+        (str: string) =>
+          str.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) =>
+            match.includes('"') && !match.includes('\\"') ? match.replace(/([^\\])"/g, '$1\\"') : match
+          ),
       ];
 
       for (let i = 0; i < fixAttempts.length; i++) {
         try {
           const fixed = fixAttempts[i](jsonString);
           const result = JSON.parse(fixed);
-          console.log(`Fix attempt ${i + 1} succeeded!`);
           return result;
-        } catch (e) {
-          console.log(`Fix attempt ${i + 1} failed`);
-        }
+        } catch {}
       }
-      
-      // Final fallback: manual parsing
-      console.log("All automatic fixes failed, attempting manual parsing...");
+
+      // Fallback manual parsing
       return manualJSONParse(jsonString);
     }
   }
 
   // Manual JSON parser as last resort
-  function manualJSONParse(text: string) {
+  function manualJSONParse(text: string): { items: QuestionItem[] } {
     try {
-      console.log("Starting manual parsing...");
-      
-      // Look for the items array pattern
       const itemsMatch = text.match(/"items"\s*:\s*\[(.*)\]\s*\}/s);
-      if (!itemsMatch) {
-        console.log("No items array found");
-        return { items: [] };
-      }
+      if (!itemsMatch) return { items: [] };
 
       const itemsContent = itemsMatch[1];
-      const questions: any[] = [];
-      
-      // Split by question objects more reliably
+      const questions: QuestionItem[] = [];
+
       const questionBlocks = itemsContent.split(/\{"Q_ID"/).slice(1);
-      console.log(`Found ${questionBlocks.length} question blocks`);
-      
-      questionBlocks.forEach((block, index) => {
-        try {
-          // Re-add the Q_ID part we split on
-          const fullBlock = `{"Q_ID"${block}`;
-          
-          // Extract basic question info
-          const qIdMatch = fullBlock.match(/"Q_ID"\s*:\s*"([^"]*)"/);
-          const qNameMatch = fullBlock.match(/"Q_NAME"\s*:\s*"([^"]*)"/);
-          const qAnsMatch = fullBlock.match(/"Q_ANS"\s*:\s*"([^"]*)"/);
-          
-          if (qIdMatch && qNameMatch) {
-            console.log(`Processing question ${index + 1}:`, qNameMatch[1]);
-            
-            // Extract childItems array
-            const childItemsMatch = fullBlock.match(/"childItems"\s*:\s*\[(.*?)\]\s*\}/s);
-            let options: any[] = [];
-            
-            if (childItemsMatch) {
-              const childItemsContent = childItemsMatch[1];
-              console.log("Child items content:", childItemsContent);
-              
-              // Extract options using a more robust pattern
-              const optionRegex = /\{"OP_ID":\s*(\d+),\s*"OP_NAME":\s*"([^"]*)"\}/g;
-              let optionMatch;
-              
-              while ((optionMatch = optionRegex.exec(childItemsContent)) !== null) {
-                options.push({
-                  OP_ID: parseInt(optionMatch[1]),
-                  OP_NAME: optionMatch[2]
-                });
-              }
-              
-              console.log(`Found ${options.length} options for question ${index + 1}`);
+
+      questionBlocks.forEach((block) => {
+        const fullBlock = `{"Q_ID"${block}`;
+        const qIdMatch = fullBlock.match(/"Q_ID"\s*:\s*"([^"]*)"/);
+        const qNameMatch = fullBlock.match(/"Q_NAME"\s*:\s*"([^"]*)"/);
+        const qAnsMatch = fullBlock.match(/"Q_ANS"\s*:\s*"([^"]*)"/);
+
+        if (qIdMatch && qNameMatch) {
+          const childItems: Option[] = [];
+
+          const childItemsMatch = fullBlock.match(/"childItems"\s*:\s*\[(.*?)\]\s*\}/s);
+          if (childItemsMatch) {
+            const childItemsContent = childItemsMatch[1];
+            const optionRegex = /\{"OP_ID":\s*(\d+),\s*"OP_NAME":\s*"([^"]*)"\}/g;
+            let optionMatch;
+            while ((optionMatch = optionRegex.exec(childItemsContent)) !== null) {
+              childItems.push({
+                OP_ID: parseInt(optionMatch[1]),
+                OP_NAME: optionMatch[2],
+              });
             }
-            
-            // If no options found with the first method, try alternative pattern
-            if (options.length === 0) {
-              console.log("Trying alternative option parsing...");
-              const altOptionRegex = /"OP_ID":\s*(\d+).*?"OP_NAME":\s*"([^"]*)"/gs;
-              let altOptionMatch;
-              
-              while ((altOptionMatch = altOptionRegex.exec(fullBlock)) !== null) {
-                options.push({
-                  OP_ID: parseInt(altOptionMatch[1]),
-                  OP_NAME: altOptionMatch[2]
-                });
-              }
-              console.log(`Found ${options.length} options with alternative method`);
-            }
-            
-            questions.push({
-              Q_ID: qIdMatch[1],
-              Q_NAME: qNameMatch[1],
-              Q_ANS: qAnsMatch ? qAnsMatch[1] : "",
-              childItems: options
-            });
           }
-        } catch (e) {
-          console.log(`Error parsing question block ${index}:`, e);
+
+          questions.push({
+            Q_ID: qIdMatch[1],
+            Q_NAME: qNameMatch[1],
+            Q_ANS: qAnsMatch ? qAnsMatch[1] : "",
+            childItems,
+          });
         }
       });
-      
-      console.log(`Manual parsing complete. Found ${questions.length} questions.`);
+
       return { items: questions };
-    } catch (error) {
-      console.error("Manual parsing failed:", error);
+    } catch {
       return { items: [] };
     }
   }
@@ -148,43 +100,27 @@ export default function Home() {
     async function fetchQuestions() {
       try {
         setError(null);
-        console.log("Fetching questions...");
-        
+
         const res = await fetch("https://oracleapex.com/ords/imon/hero/question/");
-        
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
         const text = await res.text();
-        console.log("Raw response received, length:", text.length);
-        console.log("First 500 chars:", text.substring(0, 500));
-        
-        const data = safeJSONParse(text);
-        console.log("Parsed data structure:", data);
-        
+        const data: { items: QuestionItem[] } = safeJSONParse(text);
+
         if (data.items && Array.isArray(data.items)) {
-          // Log each question with its options to debug
-          data.items.forEach((q: Question, index: number) => {
-            console.log(`Question ${index + 1}:`, q.Q_NAME);
-            console.log(`Options:`, q.childItems);
-          });
-          
           setQuestions(data.items);
-          console.log(`Loaded ${data.items.length} questions`);
         } else {
           setError("No questions found in response");
           setQuestions([]);
         }
       } catch (err) {
-        console.error("Error fetching questions:", err);
         setError(err instanceof Error ? err.message : "Unknown error occurred");
         setQuestions([]);
       } finally {
         setLoading(false);
       }
     }
-    
+
     fetchQuestions();
   }, []);
 
@@ -195,7 +131,7 @@ export default function Home() {
   const retryFetch = () => {
     setLoading(true);
     setError(null);
-    window.location.reload(); // Simple reload for retry
+    window.location.reload();
   };
 
   return (
@@ -261,9 +197,7 @@ export default function Home() {
             {selectedAnswers[q.Q_ID] && (
               <p
                 className={`mt-3 font-medium ${
-                  selectedAnswers[q.Q_ID] === q.Q_ANS
-                    ? "text-green-600"
-                    : "text-red-600"
+                  selectedAnswers[q.Q_ID] === q.Q_ANS ? "text-green-600" : "text-red-600"
                 }`}
               >
                 {selectedAnswers[q.Q_ID] === q.Q_ANS
