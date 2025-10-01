@@ -2,6 +2,7 @@
 import { jsonrepair } from "jsonrepair";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import DeviceInfoComponent from "./components/DeviceInfoComponent";
 
 interface Option {
   OP_ID: number;
@@ -212,6 +213,7 @@ export default function QuizPage() {
           )}
         </>
       )}
+      <DeviceInfoComponent />
     </div>
   );
 }
