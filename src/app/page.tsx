@@ -1,11 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-// Define proper types
-interface Option {
-  OP_ID: number;
-  OP_NAME: string;
-}
+
 
 interface QuestionItem {
   Q_ID: string;
@@ -13,7 +9,10 @@ interface QuestionItem {
   Q_ANS: string;
   childItems: Option[];
 }
-
+interface Option {
+  OP_ID: number;
+  OP_NAME: string;
+}
 export default function Home() {
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +54,7 @@ export default function Home() {
       if (!itemsMatch) return { items: [] };
 
       const itemsContent = itemsMatch[1];
-      const questions: QuestionItem[] = [];
+    const questions: QuestionItem[] = [];
 
       const questionBlocks = itemsContent.split(/\{"Q_ID"/).slice(1);
 
