@@ -34,30 +34,34 @@ export default function QuizPage() {
 
   // Fetch and shuffle questions once
   useEffect(() => {
-    async function fetchQuestions() {
-      try {
-        const res = await fetch("https://oracleapex.com/ords/imon/hero/question/");
-        const text = await res.text();
-        const fixed = jsonrepair(text);
-        const data = JSON.parse(fixed);
+  async function fetchQuestions() {
+    try {
+      const res = await fetch("https://oracleapex.com/ords/imon/hero/question/");
+      const text = await res.text();
+      const fixed = jsonrepair(text);
+      const data = JSON.parse(fixed);
 
-        // Shuffle questions and their options
-        const shuffledQuestions = shuffleArray(data.items || []).map((q: QuestionItem) => ({
-          ...q,
-          childItems: shuffleArray(q.childItems),
-        }));
+      // Explicitly cast to QuestionItem[]
+      const items: QuestionItem[] = data.items as QuestionItem[] || [];
 
-        setQuestions(shuffledQuestions);
-      } catch (err) {
-        console.error("❌ JSON repair failed", err);
-        setQuestions([]);
-      } finally {
-        setLoading(false);
-      }
+      // Shuffle questions and their options
+      const shuffledQuestions = shuffleArray(items).map((q) => ({
+        ...q,
+        childItems: shuffleArray(q.childItems),
+      }));
+
+      setQuestions(shuffledQuestions);
+    } catch (err) {
+      console.error("❌ JSON repair failed", err);
+      setQuestions([]);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    fetchQuestions();
-  }, []);
+  fetchQuestions();
+}, []);
+
 
   const handleChange = (qId: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [qId]: value }));
